@@ -1,0 +1,12 @@
+{
+  "name": "Sổ chi nguyên liệu",
+  "short_name": "Sổ chi",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F5EC",
+  "theme_color": "#1F4D35",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
