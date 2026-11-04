@@ -357,7 +357,7 @@ function save(){
 /* ---------- đồng bộ với Google Sheet qua Apps Script ---------- */
 function syncErr(e){
   if(e&&e.message==='timeout')return 'Mạng chậm, sẽ tự thử lại.';
-  if(e instanceof TypeError)return 'Không có mạng. Dữ liệu đã lưu trên máy, sẽ tự gửi khi có mạng.';
+  if(e instanceof TypeError)return 'Không kết nối được Apps Script. Kiểm tra link kết thúc bằng /exec và quyền "Anyone".';
   return 'Chưa đồng bộ được: '+((e&&e.message)||'lỗi')+'.';
 }
 async function syncNow(){
@@ -377,7 +377,38 @@ async function syncNow(){
   finally{S.syncing=false}
   writeLocal();refresh();
 }
-setInterval(()=>{if(S.dirty&&!S.syncing)syncNow()},30000);
+async function pullNow(){
+  if(S.syncing||!S.cfg.url||!S.cfg.pin)return;
+  S.syncing=true;
+  try{
+    const r=await withTimeout(fetch(S.cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({pin:S.cfg.pin,action:'load'})}),20000);
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||'lỗi');
+    mergeRemote(j);
+    S.syncMsg='';S.lastSync=Date.now();
+  }catch(e){S.syncMsg=syncErr(e)}
+  finally{S.syncing=false}
+  writeLocal();refresh();
+}
+function methodKey(label){return Object.keys(METHOD).find(k=>METHOD[k]===label)||'tm'}
+function mergeRemote(j){
+  for(const n of j.sup||[]){
+    if(!n||[...S.sup.values()].some(s=>norm(s.name)===norm(n)))continue;
+    const id=uid('s');S.sup.set(id,{id,name:n,uses:0,ts:Date.now()});
+  }
+  const supIdOf=name=>{const s=[...S.sup.values()].find(x=>norm(x.name)===norm(name));return s?s.id:(norm(name)===norm(LE.name)?LE.id:null)};
+  for(const r of j.tx||[]){
+    const [id,date,,sup,cats,note,amount,paid,,method]=r;
+    if(S.tx.has(id))continue;
+    S.tx.set(id,{id,date,ts:Date.parse(date)||Date.now(),supId:supIdOf(sup),sup,cats:cats?String(cats).split(', ').filter(Boolean):[],note:note||'',amount:Number(amount)||0,paid:Number(paid)||0,method:methodKey(method)});
+  }
+  for(const r of j.pays||[]){
+    const [id,date,sup,amount,method]=r;
+    if(S.pays.some(p=>p.id===id))continue;
+    S.pays.push({id,date,ts:Date.parse(date)||Date.now(),supKey:supIdOf(sup)||'n:'+sup,sup,amount:Number(amount)||0,method:methodKey(method)});
+  }
+}
+setInterval(()=>{if(S.dirty)syncNow();else pullNow()},60000);
 
 /* ---------- toast & sheet ---------- */
 let toastFn=null,toastT=0;
@@ -723,7 +754,7 @@ document.addEventListener('click',async ev=>{
       if(!pin){toast('Nhập mã PIN');return}
       S.cfg={url,pin};
       try{localStorage.setItem(CFGK,JSON.stringify(S.cfg))}catch(e){}
-      S.dirty=true;closeSheet();toast('Đang đồng bộ…');syncNow();return}
+      S.dirty=true;closeSheet();toast('Đang đồng bộ…');pullNow().then(syncNow);return}
     case 'delSup':
       if(el.dataset.armed){S.sup.delete(v);if(S.form.supId===v)S.form.supId=null;save();openSettings(false);return}
       el.dataset.armed='1';el.textContent='Chắc chắn xóa?';return;
