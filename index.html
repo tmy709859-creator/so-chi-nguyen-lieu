@@ -307,7 +307,7 @@ const METHOD_IC={tm:'cash',ck:'phone',no:'clock'};
 /* ---------- trạng thái & lưu máy ---------- */
 const KEY='sochi_data_v2', CFGK='sochi_cfg_v2';
 const S={tab:'ghi',tx:new Map(),sup:new Map(),pays:[],groups:null,cfg:{url:'',pin:''},
-  dirty:false,syncing:false,syncMsg:'',lastSync:0,
+  dirty:false,del:[],syncing:false,syncMsg:'',lastSync:0,
   ym:today().slice(0,7),filter:'all',limit:120,openSup:null,sel:new Set(),sheet:null,
   form:{amount:'',supId:null,newSup:false,cats:new Set(),method:'tm',date:today(),note:''}};
 
@@ -338,13 +338,13 @@ function load(){
     if(d){
       (d.tx||[]).forEach(t=>S.tx.set(t.id,t));
       (d.sup||[]).forEach(s=>S.sup.set(s.id,s));
-      S.pays=d.pays||[];S.groups=d.groups||null;S.dirty=!!d.dirty;
+      S.pays=d.pays||[];S.groups=d.groups||null;S.dirty=!!d.dirty;S.del=d.del||[];
     }
   }catch(e){}
   try{Object.assign(S.cfg,JSON.parse(localStorage.getItem(CFGK)||'{}'))}catch(e){}
 }
 function writeLocal(){
-  try{localStorage.setItem(KEY,JSON.stringify({tx:allTx(),sup:[...S.sup.values()],pays:S.pays,groups:S.groups,dirty:S.dirty}))}
+  try{localStorage.setItem(KEY,JSON.stringify({tx:allTx(),sup:[...S.sup.values()],pays:S.pays,groups:S.groups,dirty:S.dirty,del:S.del}))}
   catch(e){toast('Bộ nhớ máy đầy, hãy đồng bộ sớm')}
 }
 /* Mọi thay đổi đi qua đây: lưu máy ngay (tức thì), rồi đẩy lên Sheet ở nền */
@@ -364,7 +364,7 @@ async function syncNow(){
   if(S.syncing||!S.dirty)return;
   if(!S.cfg.url||!S.cfg.pin){S.syncMsg='Chưa kết nối Google Sheet. Mở Cài đặt để nhập địa chỉ và mã PIN.';refresh();return}
   S.syncing=true;S.dirty=false;
-  const body={pin:S.cfg.pin,action:'sync',
+  groups:S.gconst sentDel=S.del;S.del=[];const body={pin:S.cfg.pin,action:'sync',del:sentDel,roups,dirty:S.dirty,del:S.del}))}
     tx:allTx().sort(byDate).map(t=>[t.id,t.date,ymKey(t.date),t.sup,(t.cats||[]).join(', '),t.note||'',t.amount,Math.min(t.paid||0,t.amount),rem(t),METHOD[t.method]||'']),
     pays:[...S.pays].sort(byDate).map(p=>[p.id,p.date,p.sup,p.amount,METHOD[p.method]||'']),
     sup:[...S.sup.values()].map(s=>s.name).sort((a,b)=>a.localeCompare(b,'vi'))};
@@ -373,7 +373,7 @@ async function syncNow(){
     const j=await r.json();
     if(!j.ok)throw new Error(j.error||'lỗi');
     S.syncMsg='';S.lastSync=Date.now();
-  }catch(e){S.dirty=true;S.syncMsg=syncErr(e)}
+  }catch(e){S.dirty=true;S.del=[...new Set([...S.del,...sentDel])];S.syncMsg=syncErr(e)}
   finally{S.syncing=false}
   writeLocal();refresh();
 }
@@ -391,7 +391,7 @@ async function pullNow(){
   writeLocal();refresh();
 }
 function methodKey(label){return Object.keys(METHOD).find(k=>METHOD[k]===label)||'tm'}
-function mergeRemote(j){
+function mergeRemote(j){for(const id of j.del||[])S.tx.delete(id);
   for(const n of j.sup||[]){
     if(!n||[...S.sup.values()].some(s=>norm(s.name)===norm(n)))continue;
     const id=uid('s');S.sup.set(id,{id,name:n,uses:0,ts:Date.now()});
@@ -602,7 +602,7 @@ function saveTx(){
   toast('Đã ghi '+money(amt)+' · '+name+(day!==today()?' · '+fmtDate(day):''),{label:'Hoàn tác',fn:()=>undoTx(id),ms:7000});
   save();window.scrollTo(0,0);
 }
-function undoTx(id){S.tx.delete(id);save();toast('Đã hoàn tác')}
+function undoTx(id){S.tx.delete(id);S.del.push(id);save();toast('Đã hoàn tác')}
 
 function addSupplier(name){
   name=name.trim();if(!name)return null;
@@ -732,7 +732,7 @@ document.addEventListener('click',async ev=>{
       const t=S.tx.get(v);if(!t)return;
       t.paid=t.amount;closeSheet();save();toast('Đã đánh dấu đã trả');return}
     case 'delTx':
-      if(el.dataset.armed){S.tx.delete(v);closeSheet();save();toast('Đã xóa');return}
+      if(el.dataset.armed){S.tx.delete(v);S.del.push(v);closeSheet();save();toast('Đã xóa');return}
       el.dataset.armed='1';el.textContent='Bấm lần nữa để xóa hẳn';el.style.background='var(--danger)';el.style.color='var(--surface)';return;
     case 'openSup':S.openSup=S.openSup===v?null:v;S.sel.clear();break;
     case 'toggleBill':S.sel.has(v)?S.sel.delete(v):S.sel.add(v);break;
