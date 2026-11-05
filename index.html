@@ -364,7 +364,7 @@ async function syncNow(){
   if(S.syncing||!S.dirty)return;
   if(!S.cfg.url||!S.cfg.pin){S.syncMsg='Chưa kết nối Google Sheet. Mở Cài đặt để nhập địa chỉ và mã PIN.';refresh();return}
   S.syncing=true;S.dirty=false;
-  groups:S.gconst sentDel=S.del;S.del=[];const body={pin:S.cfg.pin,action:'sync',del:sentDel,roups,dirty:S.dirty,del:S.del}))}
+  const sentDel=S.del;S.del=[];const body={pin:S.cfg.pin,action:'sync',del:sentDel,
     tx:allTx().sort(byDate).map(t=>[t.id,t.date,ymKey(t.date),t.sup,(t.cats||[]).join(', '),t.note||'',t.amount,Math.min(t.paid||0,t.amount),rem(t),METHOD[t.method]||'']),
     pays:[...S.pays].sort(byDate).map(p=>[p.id,p.date,p.sup,p.amount,METHOD[p.method]||'']),
     sup:[...S.sup.values()].map(s=>s.name).sort((a,b)=>a.localeCompare(b,'vi'))};
@@ -792,7 +792,7 @@ function init(){
   load();
   render();
   if(!S.cfg.url)openSettings(true);
-  else if(S.dirty)syncNow();
+  else{pullNow().then(()=>{if(S.dirty)syncNow()})}
   window.addEventListener('online',syncNow);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.dirty)syncNow()});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
